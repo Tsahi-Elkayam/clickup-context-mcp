@@ -1,0 +1,17 @@
+{
+  "name": "clickup-context",
+  "version": "0.1.0",
+  "description": "Full ClickUp task context in one call — description, comments, and screenshots as real vision.",
+  "author": { "name": "etsahi" },
+  "license": "MIT",
+  "mcpServers": {
+    "clickup-context": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/index.js"],
+      "env": {
+        "CLICKUP_API_TOKEN": "${CLICKUP_API_TOKEN}",
+        "CLICKUP_TEAM_ID": "${CLICKUP_TEAM_ID}"
+      }
+    }
+  }
+}
