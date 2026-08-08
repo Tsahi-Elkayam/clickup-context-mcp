@@ -1,6 +1,6 @@
 {
   "name": "clickup-context-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server that gives Claude full ClickUp task context in one call — description, comments, and screenshots rendered as real vision.",
   "license": "MIT",
   "type": "module",

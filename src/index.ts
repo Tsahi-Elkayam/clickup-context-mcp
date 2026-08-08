@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -28,7 +29,12 @@ import {
 const cfg = loadConfig();
 const client = new ClickUpClient(cfg);
 
-const server = new McpServer({ name: "clickup-context", version: "0.1.0" });
+// Single source of truth — a hardcoded copy here drifts from package.json and
+// reports the wrong version over the MCP handshake. `files: ["dist"]` still
+// ships package.json at the tarball root, so ../ resolves from dist/index.js.
+const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
+
+const server = new McpServer({ name: "clickup-context", version });
 
 // Every read tool gets this so clients that gate on readOnlyHint don't throw
 // mutation-style confirmation prompts at pure reads. openWorld: it's a SaaS API.
