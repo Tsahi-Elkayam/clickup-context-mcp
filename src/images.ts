@@ -1,5 +1,5 @@
 import type { Config } from "./config.js";
-import type { Attachment } from "./clickup.js";
+import type { Attachment, Comment, Task } from "./clickup.js";
 
 export interface ImageBlock {
   type: "image";
@@ -28,7 +28,7 @@ function sniffMime(buf: Uint8Array): string | null {
   return null;
 }
 
-function looksLikeImage(a: Attachment): boolean {
+export function looksLikeImage(a: Attachment): boolean {
   const ext = (a.extension ?? "").toLowerCase();
   if (IMAGE_EXT.has(ext)) return true;
   return (a.mimetype ?? "").startsWith("image/");
@@ -100,4 +100,39 @@ export function inlineImageUrls(text: string | undefined): string[] {
   const found = new Set<string>();
   for (const m of text.matchAll(INLINE_URL)) found.add(m[0]);
   return [...found];
+}
+
+/**
+ * Every place an image can hide on a task, de-duped by url: real attachments,
+ * comment image blocks, and image urls written inline in text. Comment blocks
+ * matter most — a screenshot pasted into a comment appears in NEITHER
+ * `task.attachments` NOR `comment_text` (which keeps only the filename).
+ */
+export function collectImageSources(task: Task, comments: Comment[]): Attachment[] {
+  const byUrl = new Map<string, Attachment>();
+  for (const a of task.attachments ?? []) byUrl.set(a.url, a);
+
+  for (const c of comments) {
+    for (const b of c.comment ?? []) {
+      const img = b.type === "image" ? b.image : undefined;
+      if (!img?.url || byUrl.has(img.url)) continue;
+      byUrl.set(img.url, {
+        id: img.id,
+        title: img.title ?? img.name ?? "image",
+        extension: img.type ?? "", // block `type` is the bare ext ("png")...
+        mimetype: img.extension, // ...and block `extension` is the mimetype.
+        url: img.url,
+      });
+    }
+  }
+
+  const texts = [task.description, task.text_content, ...comments.map((c) => c.comment_text)];
+  for (const t of texts) {
+    for (const url of inlineImageUrls(t)) {
+      if (byUrl.has(url)) continue;
+      const ext = url.split(".").pop()?.toLowerCase() ?? "";
+      byUrl.set(url, { id: url, title: url.split("/").pop() ?? "inline", extension: ext, url });
+    }
+  }
+  return [...byUrl.values()];
 }

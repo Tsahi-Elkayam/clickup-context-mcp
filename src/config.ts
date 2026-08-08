@@ -4,6 +4,7 @@ export interface Config {
   maxImages: number;
   maxResponseMb: number;
   searchPageLimit: number;
+  maxScheduleTasks: number;
 }
 
 function intFromEnv(name: string, fallback: number): number {
@@ -34,5 +35,9 @@ export function loadConfig(): Config {
     // Fuzzy search has no native name endpoint in the ClickUp API, so we page
     // through team tasks and rank client-side. Cap the pages we pull.
     searchPageLimit: intFromEnv("CLICKUP_SEARCH_PAGE_LIMIT", 5),
+    // Dependencies are absent from the filtered-tasks response, so a schedule
+    // costs one extra call per task. 100 matches the per-minute token limit on
+    // Free/Unlimited/Business — raising it spends the next minute's budget too.
+    maxScheduleTasks: intFromEnv("CLICKUP_MAX_SCHEDULE_TASKS", 100),
   };
 }
