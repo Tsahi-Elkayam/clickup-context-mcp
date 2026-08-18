@@ -1,8 +1,17 @@
 {
   "name": "clickup-context-mcp",
-  "version": "0.2.0",
-  "description": "MCP server that gives Claude full ClickUp task context in one call — description, comments, and screenshots rendered as real vision.",
+  "version": "0.3.0",
+  "description": "MCP server for ClickUp — full task context with screenshots as real vision, a computed critical path, Docs, Chat, and time tracking, on a personal API token.",
   "license": "MIT",
+  "author": "Tsahi Elkayam <etsahi@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tsahi-Elkayam/clickup-context-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Tsahi-Elkayam/clickup-context-mcp/issues"
+  },
+  "homepage": "https://github.com/Tsahi-Elkayam/clickup-context-mcp#readme",
   "type": "module",
   "bin": {
     "clickup-context-mcp": "dist/index.js"
@@ -17,6 +26,7 @@
     "typecheck": "tsc --noEmit",
     "pretest": "tsc -p tsconfig.test.json",
     "test": "node --test dist-test/**/*.test.js",
+    "handshake": "npm run build && node scripts/handshake.mjs",
     "probe": "node scripts/probe.mjs"
   },
   "keywords": [
@@ -25,7 +35,10 @@
     "claude",
     "model-context-protocol",
     "screenshots",
-    "vision"
+    "vision",
+    "critical-path",
+    "gantt",
+    "project-management"
   ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",

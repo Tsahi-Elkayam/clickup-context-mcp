@@ -1,6 +1,11 @@
+export type Mode = "read" | "write";
+
 export interface Config {
   apiToken: string;
+  /** Empty until resolved — see resolveTeamId() in index.ts. */
   teamId: string;
+  /** "read" hides every mutating tool at registration time. */
+  mode: Mode;
   maxImages: number;
   maxResponseMb: number;
   searchPageLimit: number;
@@ -21,15 +26,15 @@ export function loadConfig(): Config {
       "CLICKUP_API_TOKEN is required. Create a personal token at ClickUp > Settings > Apps."
     );
   }
-  const teamId = process.env.CLICKUP_TEAM_ID;
-  if (!teamId) {
-    throw new Error(
-      "CLICKUP_TEAM_ID is required. It is the workspace id in your ClickUp URL: app.clickup.com/{TEAM_ID}/..."
-    );
-  }
+  // Optional: an unset id is resolved from the token's own workspaces at
+  // startup, so a single-workspace user never has to look it up.
+  const teamId = process.env.CLICKUP_TEAM_ID ?? "";
   return {
     apiToken,
     teamId,
+    // Default stays "write" — the server shipped with writes enabled and
+    // flipping the default would silently break existing setups.
+    mode: process.env.CLICKUP_MODE?.toLowerCase() === "read" ? "read" : "write",
     maxImages: intFromEnv("CLICKUP_MAX_IMAGES", 8),
     maxResponseMb: intFromEnv("CLICKUP_MAX_RESPONSE_MB", 4),
     // Fuzzy search has no native name endpoint in the ClickUp API, so we page

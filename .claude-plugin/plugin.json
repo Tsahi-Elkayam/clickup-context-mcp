@@ -1,17 +1,22 @@
 {
   "name": "clickup-context",
-  "version": "0.1.0",
-  "description": "Full ClickUp task context in one call — description, comments, and screenshots as real vision.",
-  "author": { "name": "etsahi" },
+  "version": "0.3.0",
+  "description": "ClickUp in Claude — task context with screenshots as real vision, plus schedules with a computed critical path, Docs, Chat, time tracking, and task management.",
+  "author": {
+    "name": "etsahi"
+  },
   "license": "MIT",
   "mcpServers": {
     "clickup-context": {
       "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/index.js"],
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/dist/index.js"
+      ],
       "env": {
         "CLICKUP_API_TOKEN": "${CLICKUP_API_TOKEN}",
         "CLICKUP_TEAM_ID": "${CLICKUP_TEAM_ID}"
       }
     }
-  }
+  },
+  "homepage": "https://github.com/Tsahi-Elkayam/clickup-context-mcp"
 }

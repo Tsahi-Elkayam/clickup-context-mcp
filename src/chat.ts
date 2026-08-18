@@ -87,6 +87,40 @@ export async function readReplies(
   return unwrap<ChatMessage>(res).items;
 }
 
+/**
+ * Post to a channel. `type: "message"` is required by the API — omitting it is
+ * a 400, and "post" is the other (titled, announcement-style) kind.
+ */
+export async function sendMessage(
+  client: ClickUpClient,
+  channelId: string,
+  content: string
+): Promise<ChatMessage> {
+  const res = await client.request<unknown>(
+    "POST",
+    `${base(client)}/channels/${encodeURIComponent(channelId)}/messages`,
+    {},
+    { type: "message", content, content_format: "text/md" },
+    "v3"
+  );
+  return ((res as { data?: ChatMessage })?.data ?? res) as ChatMessage;
+}
+
+export async function replyToMessage(
+  client: ClickUpClient,
+  messageId: string,
+  content: string
+): Promise<ChatMessage> {
+  const res = await client.request<unknown>(
+    "POST",
+    `${base(client)}/messages/${encodeURIComponent(messageId)}/replies`,
+    {},
+    { type: "message", content, content_format: "text/md" },
+    "v3"
+  );
+  return ((res as { data?: ChatMessage })?.data ?? res) as ChatMessage;
+}
+
 function who(m: ChatMessage): string {
   return m.user?.username || m.user?.email || (m.user_id ? `user ${m.user_id}` : "unknown");
 }

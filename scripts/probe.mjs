@@ -116,4 +116,67 @@ if (chan) {
   }
 }
 
+console.log("\n── Docs (v3) ──");
+const docs = await call("docs", `${V3}/workspaces/${team}/docs?limit=5`);
+if (docs) {
+  const items = Array.isArray(docs) ? docs : (docs.docs ?? docs.results ?? []);
+  console.log(meh(`  wrapper keys: ${Array.isArray(docs) ? "(bare array)" : Object.keys(docs).join(", ")}`));
+  console.log(
+    items.length
+      ? ok(`  ${items.length} doc(s); doc keys: ${Object.keys(items[0]).join(", ")}`)
+      : meh("  no docs returned — this workspace may simply have none")
+  );
+  if (items[0]) {
+    const pages = await call(
+      "doc pages",
+      `${V3}/workspaces/${team}/docs/${items[0].id}/pages?content_format=text%2Fmd`
+    );
+    const list = Array.isArray(pages) ? pages : (pages?.pages ?? []);
+    if (list?.length) {
+      console.log(meh(`  page keys: ${Object.keys(list[0]).join(", ")}`));
+      console.log(
+        list[0].content !== undefined
+          ? ok("  pages carry `content` — read_doc will show bodies")
+          : bad("  no `content` field — read_doc will render titles only")
+      );
+    }
+  }
+}
+
+console.log("\n── Time tracking (v2) ──");
+const entries = await call("time entries", `${V2}/team/${team}/time_entries`);
+if (entries) {
+  const list = entries.data ?? [];
+  console.log(meh(`  ${list.length} entr(ies) in the default 30-day window`));
+  if (list[0]) {
+    console.log(meh(`  entry keys: ${Object.keys(list[0]).join(", ")}`));
+    const running = list.filter((e) => Number(e.duration ?? 0) < 0).length;
+    console.log(meh(`  ${running} running timer(s) (negative duration)`));
+  }
+}
+
+console.log("\n── Custom fields + views (v2) ──");
+if (sample?.list?.id) {
+  const fields = await call("list custom fields", `${V2}/list/${sample.list.id}/field`);
+  const fl = fields?.fields ?? [];
+  console.log(meh(`  ${fl.length} field(s) on list ${sample.list.id}`));
+  if (fl[0]) {
+    console.log(meh(`  field keys: ${Object.keys(fl[0]).join(", ")}`));
+    const opts = fl.find((f) => f.type_config?.options?.length);
+    console.log(
+      opts
+        ? ok(`  "${opts.name}" (${opts.type}) has ${opts.type_config.options.length} option(s) — label matching will work`)
+        : meh("  no option-bearing field found to check label matching against")
+    );
+  }
+  const views = await call("list views", `${V2}/list/${sample.list.id}/view`);
+  if (views) {
+    const saved = views.views ?? [];
+    const required = Object.values(views.required_views ?? {}).filter((v) => v && v.id);
+    console.log(meh(`  ${saved.length} saved + ${required.length} built-in view(s)`));
+  }
+} else {
+  console.log(meh("  no sample task with a list — skipped"));
+}
+
 console.log("\nIf Chat returned 401/403, personal tokens are locked out and chat needs OAuth.\n");

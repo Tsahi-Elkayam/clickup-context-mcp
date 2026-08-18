@@ -84,6 +84,7 @@ export interface Task {
   tags?: { name?: string }[];
   dependencies?: Dependency[];
   linked_tasks?: { task_id?: string; link_id?: string }[];
+  checklists?: unknown[];
   parent?: string | null;
 }
 
@@ -148,8 +149,41 @@ export class ClickUpClient {
     return this.request<T>("GET", path, params, undefined, version);
   }
 
-  private async request<T>(
-    method: "GET" | "PUT" | "POST",
+  /**
+   * Same token, different workspace. A personal token spans every workspace the
+   * user belongs to, so switching is just swapping the id we path with.
+   */
+  withTeam(teamId: string): ClickUpClient {
+    return new ClickUpClient({ ...this.cfg, teamId });
+  }
+
+  /**
+   * Multipart upload. Deliberately does NOT set Content-Type — fetch has to
+   * generate the multipart boundary itself, and setting it by hand produces a
+   * request ClickUp rejects with a bare 400.
+   */
+  async postForm<T>(path: string, form: FormData, version: ApiVersion = "v2"): Promise<T> {
+    const res = await fetch(new URL(API_BASE[version] + path), {
+      method: "POST",
+      headers: { Authorization: this.cfg.apiToken },
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new ClickUpError(
+        `ClickUp API ${res.status} on ${path}: ${body.slice(0, 300)}`,
+        res.status
+      );
+    }
+    return (await res.json()) as T;
+  }
+
+  /**
+   * Public so the docs/time/admin modules reuse one auth + retry + error path
+   * instead of each re-implementing fetch.
+   */
+  async request<T>(
+    method: "GET" | "PUT" | "POST" | "DELETE",
     path: string,
     params?: QueryParams,
     body?: unknown,
@@ -219,7 +253,7 @@ export class ClickUpClient {
   }
 
   /**
-   * The one write in this server. `status` must match the list's status string
+   * `status` must match the list's status string
    * byte-for-byte — resolveStatus() exists because those strings carry stray
    * spaces and periods that nobody types correctly.
    */
@@ -257,6 +291,39 @@ export class ClickUpClient {
       `/task/${encodeURIComponent(taskId)}/comment`,
       params,
       { comment_text: commentText, notify_all: notifyAll }
+    );
+  }
+
+  /**
+   * Params for referencing a task by its custom id (ABC-123) instead of the
+   * native one. ClickUp needs both flags or it 404s on a perfectly valid id.
+   */
+  customIdParams(useCustomId: boolean): QueryParams {
+    return useCustomId ? { custom_task_ids: "true", team_id: this.cfg.teamId } : {};
+  }
+
+  createTask(listId: string, body: Record<string, unknown>): Promise<Task> {
+    return this.request<Task>("POST", `/list/${encodeURIComponent(listId)}/task`, {}, body);
+  }
+
+  updateTask(
+    taskId: string,
+    body: Record<string, unknown>,
+    useCustomId = false
+  ): Promise<Task> {
+    return this.request<Task>(
+      "PUT",
+      `/task/${encodeURIComponent(taskId)}`,
+      this.customIdParams(useCustomId),
+      body
+    );
+  }
+
+  deleteTask(taskId: string, useCustomId = false): Promise<unknown> {
+    return this.request<unknown>(
+      "DELETE",
+      `/task/${encodeURIComponent(taskId)}`,
+      this.customIdParams(useCustomId)
     );
   }
 
