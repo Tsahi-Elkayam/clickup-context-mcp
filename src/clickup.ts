@@ -82,6 +82,8 @@ export interface Task {
   assignees?: User[];
   priority?: { priority?: string } | null;
   tags?: { name?: string }[];
+  /** Values only — the field's type and options come from GET /list/{id}/field. */
+  custom_fields?: { id: string; name?: string; type?: string; value?: unknown }[];
   dependencies?: Dependency[];
   linked_tasks?: { task_id?: string; link_id?: string }[];
   checklists?: unknown[];

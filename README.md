@@ -203,15 +203,26 @@ npm run build      # compile
 npm test           # build + run unit tests
 npm run typecheck  # types only
 npm run handshake  # boot over stdio and assert the tool surface (no network)
-npm run probe      # hit your real workspace and print response shapes
+npm run probe      # read your real workspace and print response shapes
+npm run verify-writes <space_id>   # exercise every write path for real
 ```
 
 CI runs typecheck, tests, and the handshake on Node 18/20/22.
 
 > **Verify before you trust the writes.** Most tools here were built to ClickUp's
-> API reference rather than to observed responses. `npm run probe` checks the
-> shapes the thinner corners depend on — Docs v3, time entries, custom field
-> options, views — against your own workspace.
+> API reference rather than to observed responses.
+
+`probe` only reads, so it can't catch the failure mode that matters most: a write
+that *succeeds and is silently wrong*. `verify-writes` covers that. It creates a
+throwaway List in a Space you name, runs a task through every write, asserts each
+one reads back correctly, and deletes the List again — including the two checks
+worth losing sleep over:
+
+- **a Doc "append" that actually replaces.** ClickUp's default edit mode *is*
+  `replace`, so a wrong parameter name destroys the page and reports success.
+- **a dependency stored backwards.** `depends_on` and `dependency_of` are both
+  valid fields; swap them and the call succeeds while every critical path
+  silently inverts.
 
 ## Credits
 
