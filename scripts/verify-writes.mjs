@@ -63,6 +63,29 @@ function assert(cond, msg) {
   if (!cond) throw new Error(msg);
 }
 
+/**
+ * Locate a drop_down custom field to test the option mapping against. Checks
+ * the scratch List first (which inherits Space-level fields), then walks a
+ * bounded number of other Lists in the Space for Folder/List-level ones.
+ */
+async function findDropdown(scratchListId, spaceId) {
+  const isDropdown = (f) => f.type === "drop_down" && f.type_config?.options?.length;
+  const own = await listFields(client, scratchListId);
+  const inherited = own.find(isDropdown);
+  if (inherited) return { field: inherited, listId: scratchListId };
+
+  const lists = [...((await listContainers(client, "list", spaceId)) ?? [])];
+  for (const folder of (await listContainers(client, "folder", spaceId)) ?? []) {
+    lists.push(...((await listContainers(client, "list", spaceId, folder.id)) ?? []));
+  }
+  // Bounded so one call can't walk a large Space through the rate limit.
+  for (const l of lists.filter((l) => l.id !== scratchListId).slice(0, 10)) {
+    const hit = (await listFields(client, l.id).catch(() => [])).find(isDropdown);
+    if (hit) return { field: hit, listId: l.id };
+  }
+  return { field: null, listId: null };
+}
+
 const cfg = loadConfig();
 const client = new ClickUpClient(cfg);
 
@@ -175,22 +198,35 @@ try {
 
   // -------------------------------------------------------- custom fields
   await check("custom field values store the option they were asked for", async () => {
-    const fields = await listFields(client, list.id);
-    const dropdown = fields.find((f) => f.type === "drop_down" && f.type_config?.options?.length);
-    if (!dropdown) return skip("this Space has no drop_down custom field to test against");
-    const label = (dropdown.type_config.options[0].name ?? dropdown.type_config.options[0].label ?? "").trim();
-    const coerced = coerceValue(dropdown, label);
+    // Space-level fields are inherited by the scratch List, but Folder- and
+    // List-level ones are not, so widen the search before giving up. The write
+    // still only ever touches a task this script created.
+    const { field, listId } = await findDropdown(list.id, spaceId);
+    if (!field) return skip("no drop_down custom field anywhere in this Space to test against");
+
+    const opts = field.type_config.options;
+    const label = (opts[0].name ?? opts[0].label ?? "").trim();
+    const coerced = coerceValue(field, label);
     assert(!("error" in coerced), `coercion refused "${label}": ${coerced.error}`);
-    await setFieldValue(client, taskA.id, dropdown.id, coerced.value);
-    const back = await client.getTask(taskA.id);
-    const stored = (back.custom_fields ?? []).find((f) => f.id === dropdown.id);
-    const opts = dropdown.type_config.options;
-    const chosen = opts[Number(stored?.value)] ?? opts.find((o) => o.id === stored?.value);
-    assert(
-      chosen && (chosen.name ?? chosen.label) === label,
-      `set "${label}" but the task reads back ${JSON.stringify(stored?.value)} — the option id/orderindex mapping is wrong`
-    );
-    return `${dropdown.name} = ${label}`;
+
+    // If the field lives on another List, make our own scratch task there
+    // rather than writing to work that belongs to somebody.
+    const own = listId === list.id
+      ? taskA
+      : await client.createTask(listId, buildTaskBody({ name: `zz-verify field ${stamp}` }, "create"));
+    try {
+      await setFieldValue(client, own.id, field.id, coerced.value);
+      const back = await client.getTask(own.id);
+      const stored = (back.custom_fields ?? []).find((f) => f.id === field.id);
+      const chosen = opts[Number(stored?.value)] ?? opts.find((o) => o.id === stored?.value);
+      assert(
+        chosen && (chosen.name ?? chosen.label) === label,
+        `set "${label}" but the task reads back ${JSON.stringify(stored?.value)} — the option id/orderindex mapping is wrong`
+      );
+    } finally {
+      if (own !== taskA) await client.deleteTask(own.id).catch(() => {});
+    }
+    return `${field.name} = ${label}${listId === list.id ? "" : ` (borrowed from list ${listId})`}`;
   });
 
   // ------------------------------------------------------ doc APPEND mode
@@ -239,9 +275,6 @@ try {
   });
 } finally {
   console.log("");
-  if (docId) {
-    console.log(grey(`Doc "zz-verify ${stamp}" was created — ClickUp's public API has no delete-doc endpoint, so remove it by hand.`));
-  }
   if (list?.id) {
     try {
       await deleteContainer(client, "list", list.id);
@@ -249,6 +282,23 @@ try {
     } catch (e) {
       console.log(red(`COULD NOT DELETE scratch List ${list.id} — delete "${SCRATCH}" by hand. ${e.message}`));
     }
+  }
+  // v3 has no delete-doc endpoint, but a Doc parented to a List may go with it.
+  // Check rather than guess — telling someone to hunt for a Doc that isn't
+  // there is as unhelpful as leaving one behind silently.
+  if (docId) {
+    let leftover = true;
+    try {
+      const doc = await client.get(`/workspaces/${cfg.teamId}/docs/${docId}`, {}, "v3");
+      leftover = !(doc?.deleted || doc?.archived);
+    } catch {
+      leftover = false; // 404 — it went with the List.
+    }
+    console.log(
+      leftover
+        ? grey(`Doc "zz-verify ${stamp}" (${docId}) is still there — v3 has no delete-doc endpoint, so remove it by hand.`)
+        : grey(`Doc "zz-verify ${stamp}" went with the List.`)
+    );
   }
   console.log(
     `\n${passed} passed · ${failed} failed · ${skipped} skipped\n` +
